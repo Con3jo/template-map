@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<style>
+
+  .names {
+  fill: none;
+  stroke: #fff;
+  stroke-linejoin: round;
+  }
+
+    /* Tooltip CSS */
+    .d3-tip {
+    line-height: 1.5;
+    font-weight: normal;
+    font-family:"avenir next", Arial, sans-serif;
+    padding: 6px;
+    background: rgba(0, 0, 0, 0.4);
+    color: white;
+    border-radius: 1px;
+    pointer-events: none;
+    }
+
+    /* Creates a small triangle extender for the tooltip */
+    .d3-tip:after {      
+      box-sizing: border-box;
+      display: inline;
+      font-size: 8px;
+      width: 100%;
+      line-height: 1.5;
+      color: rgba(0, 0, 0, 0.6);
+      position: absolute;
+      pointer-events: none;
+      
+    }
+
+    /* Northward tooltips */
+    .d3-tip.n:after {
+      content: "\25BC";
+      margin: -1px 0 0 0;
+      top: 100%;
+      left: 0;
+      text-align: center;
+    }
+
+    /* Eastward tooltips */
+    .d3-tip.e:after {
+      content: "\25C0";
+      margin: -4px 0 0 0;
+      top: 0%;
+      left: -8px;
+    }
+
+    /* Southward tooltips */
+    .d3-tip.s:after {
+      content: "\25B2";
+      margin: 0 0 1px 0;
+      top: -8px;
+      left: 0;
+      text-align: center;
+    }
+
+    /* Westward tooltips */
+    .d3-tip.w:after {
+      content: "\25B6";
+      margin: -4px 0 0 -1px;
+      top: 50%;
+      left: 100%;
+    }
+
+/*    text{
+      pointer-events:none;
+    }*/
+
+    .details{
+      color:white;
+    }
+
+</style>
+<body>
+<script src="https://d3js.org/d3.v4.min.js"></script>
+<script src="https://d3js.org/queue.v1.min.js"></script>
+<script src="https://d3js.org/topojson.v1.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3-legend/2.25.6/d3-legend.min.js" integrity="sha512-wNH6xsp2n8CfB91nrBtfc4sfLwYPBMjSWVUwQOp60AYYXH6i8yCwuKFZ4rgK2i6pQek/b+bSyR7b01/922IBzQ==" crossorigin="anonymous"></script>
+<script src="d3-tip.js"></script>
+
+<div style="position: relative;
+    top: 10px;
+    padding-left: 200px;"> 
+  <select id="mySelect" onchange="changeMap()" style="font-size: 20px;">
+    <option value="mapa_01" default>Enero (qty)Libros - Nacionalidad Autor</option>
+    <option value="mapa_02">Enero (qty)Autores</option>
+    <option value="mapa_03">Enero - Países</option>
+  </select>
+</div>
+
+<script>
+
+/* Maps files, each for every item in mySelect element */
+/* Keys and Values MUST match */
+var maps = {
+  "mapa_01":"2021_01/map_01_books_individual.tsv",
+  "mapa_02":"2021_01/map_02_books_authors.tsv",
+  "mapa_03":"2021_01/map_countries.tsv",
+};
+
+var colors = {
+  "mapa_01":{
+    "domain": [0,4,70],
+    "range": ["white", "teal", "#024f55"]
+  },
+  "mapa_02":{
+    "domain": [0,4,50],
+    "range": ["white", "teal", "#024f55"]
+  },
+  "mapa_03":{
+    "domain": [0,1],
+    "range": ["white", "purple"]
+  }
+};
+
+function changeMap(){
+  color = d3.scaleLinear()
+  .domain(colors[document.getElementById("mySelect").value]["domain"])
+  .range(colors[document.getElementById("mySelect").value]["range"]);
+  queue()
+      .defer(d3.json, "world_countries.json")
+      .defer(d3.tsv, maps[document.getElementById("mySelect").value])
+      .await(ready);
+
+}
+var format = d3.format(",");
+
+// Set tooltips
+var tip = d3.tip()
+            .attr('class', 'd3-tip')
+            .offset([-10, 0])
+            .html(function(d) {
+              var population = d.population?format(d.population):0;
+              return "<strong>País: </strong><span class='details'>" + d.properties.name + "<br></span>" + "<strong>Cantidad: </strong><span class='details'>" + population +"</span>";
+            })
+
+
+var margin = {top: 0, right: 0, bottom: 0, left: 0},
+            width = 1440 - margin.left - margin.right,
+            height = 725 - margin.top - margin.bottom;
+var color = d3.scaleLinear()
+  .domain(colors[document.getElementById("mySelect").value]["domain"])
+  .range(colors[document.getElementById("mySelect").value]["range"]);
+ 
+//var path = d3.geoPath();
+
+var svg = d3.select("body")
+            .append("svg")
+            .attr("width", width)
+            .attr("height", height)
+            .append('g')
+            .attr('class', 'map');
+
+var projection = d3.geoMercator()
+                   .scale(130)
+                  .translate( [width / 2, height / 1.5]);
+
+var path = d3.geoPath().projection(projection);
+
+svg.call(tip);
+
+
+
+  
+d3.queue()
+    .defer(d3.json, "world_countries.json")
+    .defer(d3.tsv, maps[document.getElementById("mySelect").value])
+    .await(ready);
+
+function ready(error, data, population) {
+  var populationById = {};
+  population.forEach(function(d) { populationById[d.id] = +d.population; });
+  data.features.forEach(function(d) { d.population = populationById[d.id] });
+  svg.select("countries").remove();
+
+    svg.select(".legendLinear").remove();
+
+  svg.append("g")
+      .attr("class", "countries")
+    .selectAll("path")
+      .data(data.features)
+    .enter().append("path")
+      .attr("d", path)
+      .style("fill", function(d) { 
+        var colorVal = (populationById[d.id]!== undefined)?color(populationById[d.id]):"white";
+        return  colorVal;})
+      .style('stroke', 'white')
+      .style('stroke-width', 1.5)
+      .style("opacity",1)
+      // tooltips
+        .style("stroke","black")
+        .style('stroke-width', 0.3)
+        .on('mouseover',function(d){
+
+          tip.show(d);
+          
+          d3.select(this)
+            .style("opacity", 1)
+            .style("stroke","black")
+            .style("stroke-width",2);
+
+        })
+        .on('mouseout', function(d){
+          tip.hide(d);
+
+          d3.select(this)
+            .style("opacity", 1)
+            .style("stroke","black")
+            .style("stroke-width",0.3);
+        });
+
+  svg.append("path")
+      .datum(topojson.mesh(data.features, function(a, b) { return a.id !== b.id; }))
+      .attr("class", "names")
+      .attr("d", path);
+
+
+    svg.append("g")
+      .attr("class", "legendLinear")
+      .attr("transform", "translate(140,50)");
+
+    var legendLinear = d3.legendColor()
+      .shapeWidth(35)
+      .cells(5)
+      .orient('horizontal')
+      .scale(color);
+
+    svg.select(".legendLinear")
+      .call(legendLinear)
+      .style("stroke","black")
+            .style('stroke-width', 0.3)
+      .style('font-family','"avenir next", Arial, sans-serif');
+}
+
+</script>
+</body>
+</html>
